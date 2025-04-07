@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stack Tower ZOK Edition</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Orbitron', sans-serif;
+      background-color: #121212;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas {
+      background-color: #222;
+      border: 5px solid #00ffe5;
+      box-shadow: 0 0 20px #00ffe5;
+    }
+    #scoreBoard {
+      margin-top: 10px;
+      font-size: 1.5rem;
+    }
+    #devName {
+      position: absolute;
+      bottom: 10px;
+      font-size: 1rem;
+      color: #aaa;
+    }
+    #themeBtn, #speedModeBtn {
+      position: absolute;
+      top: 10px;
+      background: #00ffe5;
+      color: #000;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 8px;
+    }
+    #speedModeBtn {
+      right: 120px;
+    }
+    #themeBtn {
+      right: 10px;
+    }
+    #timer {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="timer">Time: 60</div>
+  <button id="speedModeBtn">Speed Mode</button>
+  <button id="themeBtn">Toggle Theme</button>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  <div id="scoreBoard">Score: 0 | High Score: 0 | Level: 1</div>
+  <div id="devName">Developed by Gowardhan Kashyap</div>
+
+  <audio id="placeSound" src="https://freesound.org/data/previews/256/256113_3263906-lq.mp3"></audio>
+  <audio id="gameOverSound" src="https://freesound.org/data/previews/178/178186_285997-lq.mp3"></audio>
+  <audio id="bgMusic" src="https://freesound.org/data/previews/566/566387_9020090-lq.mp3" loop></audio>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreBoard = document.getElementById("scoreBoard");
+    const placeSound = document.getElementById("placeSound");
+    const gameOverSound = document.getElementById("gameOverSound");
+    const bgMusic = document.getElementById("bgMusic");
+    const timerDisplay = document.getElementById("timer");
+    let themeToggle = false;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    let stack = [];
+    let currentBlock = null;
+    let direction = 1;
+    let score = 0;
+    let highScore = localStorage.getItem("stackTowerHighScore") || 0;
+    let level = 1;
+    let animationFrame;
+    let speedMode = false;
+    let timer = 60;
+    let timerInterval;
+
+    function randomColor() {
+      const colors = ["#00ffe5", "#ff4f81", "#ffaa00", "#39ff14", "#0084ff"];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    function drawBlock(block) {
+      ctx.fillStyle = block.color;
+      ctx.fillRect(block.x, block.y, block.w, block.h);
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timer = 60;
+      timerInterval = setInterval(() => {
+        timer--;
+        timerDisplay.textContent = `Time: ${timer}`;
+        if (timer <= 0) {
+          clearInterval(timerInterval);
+          gameOver();
+        }
+      }, 1000);
+    }
+
+    function init(currentLevel = 1) {
+      cancelAnimationFrame(animationFrame);
+      clearInterval(timerInterval);
+      level = currentLevel;
+      stack = [{ x: 100, y: height - 30, w: 200, h: 30, color: randomColor() }];
+      currentBlock = { x: 0, y: height - 60, w: 200, h: 30, color: randomColor() };
+      score = 0;
+      direction = 1;
+      startTimer();
+      bgMusic.volume = 0.3;
+      bgMusic.play();
+      animate();
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+      for (let block of stack) drawBlock(block);
+      drawBlock(currentBlock);
+      currentBlock.x += (speedMode ? 8 : 4 + level * 0.5) * direction;
+      if (currentBlock.x + currentBlock.w > width || currentBlock.x < 0) {
+        direction *= -1;
+      }
+      animationFrame = requestAnimationFrame(animate);
+    }
+
+    function placeBlock() {
+      const last = stack[stack.length - 1];
+      const delta = currentBlock.x - last.x;
+      if (Math.abs(delta) < 10) {
+        currentBlock.x = last.x;
+        score += 2;
+      } else if (Math.abs(delta) < currentBlock.w) {
+        currentBlock.w -= Math.abs(delta);
+        if (delta > 0) currentBlock.x = last.x + delta;
+        else currentBlock.x = last.x;
+        score += 1;
+      } else {
+        gameOver();
+        return;
+      }
+      placeSound.play();
+      currentBlock.y -= 30;
+      stack.push({ ...currentBlock });
+      currentBlock = {
+        x: 0,
+        y: currentBlock.y - 30,
+        w: currentBlock.w,
+        h: 30,
+        color: randomColor(),
+      };
+      scoreBoard.innerText = `Score: ${score} | High Score: ${highScore} | Level: ${level}`;
+
+      // Level completion logic
+      if (stack.length >= 12) {
+        level++;
+        alert("🎉 Level " + (level - 1) + " Complete! Going to Level " + level);
+        init(level);
+      }
+    }
+
+    function gameOver() {
+      bgMusic.pause();
+      bgMusic.currentTime = 0;
+      gameOverSound.play();
+      clearInterval(timerInterval);
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem("stackTowerHighScore", highScore);
+        alert("🎉 New High Score! 🎉");
+      } else {
+        alert("Game Over! Your Score: " + score);
+      }
+      init(1);
+    }
+
+    canvas.addEventListener("click", placeBlock);
+
+    document.getElementById("themeBtn").addEventListener("click", () => {
+      themeToggle = !themeToggle;
+      document.body.style.backgroundColor = themeToggle ? "#ffffff" : "#121212";
+      document.body.style.color = themeToggle ? "#000000" : "#ffffff";
+      document.querySelector("canvas").style.boxShadow = themeToggle ? "0 0 20px #333" : "0 0 20px #00ffe5";
+    });
+
+    document.getElementById("speedModeBtn").addEventListener("click", () => {
+      speedMode = !speedMode;
+      alert(speedMode ? "🚀 Speed Mode Activated!" : "Speed Mode Deactivated");
+    });
+
+    init();
+  </script>
+</body>
+</html>
